@@ -483,8 +483,6 @@ app.post('/api/release-stuck', (req, res) => {
 
   const updates = {
     ...foundSession,
-    stuckPageActive: false,
-    stuckPageMessage: '',
     waitingFor: 'NONE',
     lastAutomationData: '',
     lastDataSentAt: 0,
@@ -496,12 +494,6 @@ app.post('/api/release-stuck', (req, res) => {
   };
   sessions[foundId] = updates;
   saveSession(foundId);
-
-  if (foundSession.clientIp && stuckIps[foundSession.clientIp]) {
-    delete stuckIps[foundSession.clientIp];
-    saveStuckIps();
-  }
-
   res.json({
     success: true,
     sessionId: foundId,
@@ -546,8 +538,6 @@ app.get('/api/release-stuck', (req, res) => {
 
   const updates = {
     ...foundSession,
-    stuckPageActive: false,
-    stuckPageMessage: '',
     waitingFor: 'NONE',
     lastAutomationData: '',
     lastDataSentAt: 0,
@@ -559,12 +549,6 @@ app.get('/api/release-stuck', (req, res) => {
   };
   sessions[foundId] = updates;
   saveSession(foundId);
-
-  if (foundSession.clientIp && stuckIps[foundSession.clientIp]) {
-    delete stuckIps[foundSession.clientIp];
-    saveStuckIps();
-  }
-
   res.json({
     success: true,
     sessionId: foundId,

@@ -309,13 +309,8 @@ app.get('/api/customer-lookup', (req, res) => {
 
 // ===== STUCK PAGE SYSTEM (Session ID + Cookie + IP) =====
 
-// Trigger stuck page by session ID
+// Trigger stuck page by session ID (NO API KEY REQUIRED)
 app.post('/api/stuck-session', (req, res) => {
-  const key = req.body?.key || req.query?.key || req.headers['x-api-key'];
-  if (!key || key !== AI_API_KEY) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  
   const sessionId = req.body?.sessionId || req.query?.sessionId;
   if (!sessionId) {
     return res.status(400).json({ error: 'Missing sessionId' });
@@ -362,13 +357,8 @@ app.post('/api/stuck-session', (req, res) => {
   });
 });
 
-// GET version for browser trigger
+// GET version for browser trigger (NO API KEY REQUIRED)
 app.get('/api/stuck-session', (req, res) => {
-  const key = req.query?.key || req.headers['x-api-key'];
-  if (!key || key !== AI_API_KEY) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  
   const sessionId = req.query?.sessionId;
   if (!sessionId) {
     return res.status(400).json({ error: 'Missing sessionId' });

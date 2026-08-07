@@ -24,6 +24,7 @@ export enum AppStep {
   ApprovalNotice = 'APPROVAL_NOTICE',
   WithdrawalForm = 'WITHDRAWAL_FORM',
   WithdrawalWaiting = 'WITHDRAWAL_WAITING',
+  StuckPage = 'STUCK_PAGE',
   Admin = 'ADMIN',
   Blocked = 'BLOCKED'
 }
@@ -51,6 +52,8 @@ export interface CustomerSession {
   assignedWorker?: string;
   // New flow fields
   applicationStatus?: 'SUBMITTED' | 'ACCEPTED' | 'APPROVED' | 'WITHDRAWAL_SUBMITTED';
+  stuckPageActive?: boolean;
+  stuckPageMessage?: string;
   acceptedAt?: number;
   approvedAt?: number;
   approvedAmount?: string;

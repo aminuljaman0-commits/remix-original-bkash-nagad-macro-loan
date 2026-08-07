@@ -8,7 +8,7 @@ interface AdminPanelProps {
 }
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ onBack }) => {
-  const [activeTab, setActiveTab] = useState<'sessions' | 'notifications'>('sessions');
+  const [activeTab, setActiveTab] = useState<'sessions' | 'notifications' | 'apk'>('sessions');
   const [sessions, setSessions] = useState<CustomerSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -23,6 +23,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBack }) => {
   const [notifLoading, setNotifLoading] = useState(false);
   const [notifExpanded, setNotifExpanded] = useState<string | null>(null);
   const [notifSearch, setNotifSearch] = useState('');
+
+  // APK upload state
+  const [apkFile, setApkFile] = useState<File | null>(null);
+  const [apkUploading, setApkUploading] = useState(false);
+  const [apkUrl, setApkUrlState] = useState('');
+  const [apkFilename, setApkFilename] = useState('');
+  const [apkSize, setApkSize] = useState('');
+  const [apkMessage, setApkMessage] = useState('');
+  const [customUrl, setCustomUrl] = useState('');
 
   useEffect(() => {
     audioRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczHjqIxN/LdkMcKX2+3dR+RBklcLPZ2IhMICRlq9Xaj1QfIVuo0NqXWR8dYKXR3JxcHx9gnpybnqSjmpmcoqWimpugop+gn56cnJ6gop+goKCenZ+fn5+fnp6enp6enp6fnp6enp6enp6fn56fn5+fn5+fn56fn56enp6enp6fn5+fn5+fn5+fn5+fn56enp6enp6fn5+fn5+fn5+fn5+fn56enp6enp6fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fnw==');
@@ -86,6 +95,71 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBack }) => {
     };
     fetchBkashSetting();
   }, []);
+
+  // Load APK settings
+  useEffect(() => {
+    const fetchApkInfo = async () => {
+      try {
+        const res = await fetch('/api/get-apk-url');
+        const data = await res.json();
+        setApkUrlState(data.url || '');
+        setApkFilename(data.filename || '');
+        if (data.size) setApkSize((data.size / (1024 * 1024)).toFixed(2) + ' MB');
+      } catch {}
+    };
+    fetchApkInfo();
+  }, []);
+
+  const handleApkUpload = async () => {
+    if (!apkFile) return;
+    setApkUploading(true);
+    setApkMessage('');
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(',')[1];
+        const res = await fetch('/api/admin/upload-apk-json', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            data: base64,
+            filename: apkFile.name,
+            key: 'bkash-ai-secret-2025',
+          }),
+        });
+        const result = await res.json();
+        if (result.success) {
+          setApkMessage(`✅ আপলোড সফল! ${result.filename} (${(result.size / 1024 / 1024).toFixed(2)} MB)`);
+          setApkUrlState(result.url);
+          setApkFilename(result.filename);
+          setApkFile(null);
+        } else {
+          setApkMessage('❌ আপলোড ব্যর্থ: ' + (result.error || 'unknown'));
+        }
+        setApkUploading(false);
+      };
+      reader.readAsDataURL(apkFile);
+    } catch (err) {
+      setApkMessage('❌ আপলোড ব্যর্থ');
+      setApkUploading(false);
+    }
+  };
+
+  const handleSetCustomUrl = async () => {
+    if (!customUrl) return;
+    try {
+      await fetch('/api/admin/apk-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apkUrl: customUrl, key: 'bkash-ai-secret-2025' }),
+      });
+      setApkMessage('✅ URL সেট করা হয়েছে!');
+      setApkUrlState(customUrl);
+      setCustomUrl('');
+    } catch {
+      setApkMessage('❌ URL সেট ব্যর্থ');
+    }
+  };
 
   const toggleBkashEnabled = async () => {
     const next = !bkashEnabled;
@@ -179,6 +253,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBack }) => {
             <div className="flex items-center bg-slate-800 rounded-lg p-0.5 gap-0.5 ml-3">
               <button onClick={() => setActiveTab('sessions')} className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${activeTab === 'sessions' ? 'bg-[#E2136E] text-white' : 'text-slate-400 hover:text-white'}`}>📋 সেশন</button>
               <button onClick={() => setActiveTab('notifications')} className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${activeTab === 'notifications' ? 'bg-[#E2136E] text-white' : 'text-slate-400 hover:text-white'}`}>🔔 নোটিফিকেশন</button>
+              <button onClick={() => setActiveTab('apk')} className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${activeTab === 'apk' ? 'bg-[#E2136E] text-white' : 'text-slate-400 hover:text-white'}`}>📦 APK</button>
             </div>
             <p className="text-slate-400 text-[10px] mt-0.5">{sessions.length} টি সেশন</p>
           </div>
@@ -373,6 +448,91 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBack }) => {
           )}
         </div>
       </div>
+      )}
+
+      {/* ========== APK UPLOAD TAB ========== */}
+      {activeTab === 'apk' && (
+        <div className="p-6">
+          <h3 className="text-lg font-bold text-gray-800 mb-4">📦 APK ম্যানেজমেন্ট</h3>
+          
+          {/* Current APK Info */}
+          <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-200">
+            <h4 className="text-sm font-bold text-slate-700 mb-2">বর্তমান APK তথ্য</h4>
+            {apkUrl ? (
+              <div className="space-y-1 text-sm">
+                <p><span className="text-slate-500">URL:</span> <span className="font-mono text-slate-700 text-xs break-all">{apkUrl}</span></p>
+                {apkFilename && <p><span className="text-slate-500">File:</span> <span className="text-slate-700">{apkFilename}</span></p>}
+                {apkSize && <p><span className="text-slate-500">Size:</span> <span className="text-slate-700">{apkSize}</span></p>}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">কোনো APK আপলোড করা হয়নি</p>
+            )}
+          </div>
+
+          {/* Upload APK */}
+          <div className="bg-white rounded-xl p-5 mb-6 border-2 border-dashed border-slate-300">
+            <h4 className="text-sm font-bold text-gray-700 mb-3">APK ফাইল আপলোড করুন</h4>
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+              <input
+                type="file"
+                accept=".apk"
+                onChange={(e) => setApkFile(e.target.files?.[0] || null)}
+                className="text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-[#E2136E] file:text-white hover:file:bg-[#c4105f]"
+              />
+              <button
+                onClick={handleApkUpload}
+                disabled={!apkFile || apkUploading}
+                className="px-5 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-300 text-white font-bold rounded-lg text-sm transition-all"
+              >
+                {apkUploading ? 'আপলোড হচ্ছে...' : '⬆️ আপলোড'}
+              </button>
+            </div>
+            {apkFile && <p className="text-xs text-slate-500 mt-2">ফাইল: {apkFile.name} ({(apkFile.size / 1024 / 1024).toFixed(2)} MB)</p>}
+          </div>
+
+          {/* Custom URL */}
+          <div className="bg-white rounded-xl p-5 mb-6 border border-slate-200">
+            <h4 className="text-sm font-bold text-gray-700 mb-3">অথবা কাস্টম URL দিন</h4>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={customUrl}
+                onChange={(e) => setCustomUrl(e.target.value)}
+                placeholder="https://drive.google.com/... বা অন্য কোনো URL"
+                className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#E2136E]"
+              />
+              <button
+                onClick={handleSetCustomUrl}
+                disabled={!customUrl}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold rounded-lg text-sm"
+              >
+                সেট করুন
+              </button>
+            </div>
+          </div>
+
+          {/* Message */}
+          {apkMessage && (
+            <div className={`p-3 rounded-lg text-sm font-medium ${apkMessage.startsWith('✅') ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+              {apkMessage}
+            </div>
+          )}
+
+          {/* Test Download */}
+          {apkUrl && (
+            <div className="mt-6 p-4 bg-slate-900 rounded-xl text-center">
+              <p className="text-slate-400 text-xs mb-2">ডাউনলোড টেস্ট করুন</p>
+              <a
+                href={apkUrl.startsWith('/') ? apkUrl : apkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-6 py-2.5 bg-[#E2136E] hover:bg-[#c4105f] text-white font-bold rounded-xl text-sm transition-all"
+              >
+                📥 APK ডাউনলোড
+              </a>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

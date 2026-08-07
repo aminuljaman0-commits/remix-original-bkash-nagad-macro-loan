@@ -475,6 +475,102 @@ app.post('/api/unstuck', (req, res) => {
   res.json({ success: true, removed });
 });
 
+// ===== APK MANAGEMENT (Admin upload + download URL) =====
+
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
+
+// Upload APK file (admin only)
+app.post('/api/admin/upload-apk', express.raw({ type: 'application/octet-stream', limit: '50mb' }), (req, res) => {
+  const key = req.query?.key || req.headers['x-api-key'];
+  if (!key || key !== AI_API_KEY) return res.status(401).json({ error: 'Unauthorized' });
+  
+  if (!req.body || req.body.length === 0) {
+    return res.status(400).json({ error: 'No file data' });
+  }
+  
+  const filename = req.query?.filename || 'app-release.apk';
+  const uploadDir = path.join(__dirname, 'public', 'uploads');
+  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+  
+  const filePath = path.join(uploadDir, filename);
+  fs.writeFileSync(filePath, req.body);
+  
+  // Store APK config
+  const apkUrl = `/uploads/${encodeURIComponent(filename)}`;
+  settings.apkUrl = apkUrl;
+  settings.apkFilename = filename;
+  settings.apkSize = req.body.length;
+  settings.apkUpdatedAt = Date.now();
+  saveSettings();
+  
+  res.json({
+    success: true,
+    filename,
+    size: req.body.length,
+    url: apkUrl,
+    sizeMB: (req.body.length / (1024 * 1024)).toFixed(2),
+  });
+});
+
+// Also handle base64 upload from form
+app.post('/api/admin/upload-apk-json', (req, res) => {
+  const key = req.body?.key || req.query?.key || req.headers['x-api-key'];
+  if (!key || key !== AI_API_KEY) return res.status(401).json({ error: 'Unauthorized' });
+  
+  const { data, filename } = req.body;
+  if (!data) return res.status(400).json({ error: 'No data' });
+  
+  const buffer = Buffer.from(data, 'base64');
+  const uploadDir = path.join(__dirname, 'public', 'uploads');
+  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+  
+  const fname = filename || 'app-release.apk';
+  const filePath = path.join(uploadDir, fname);
+  fs.writeFileSync(filePath, buffer);
+  
+  const apkUrl = `/uploads/${encodeURIComponent(fname)}`;
+  settings.apkUrl = apkUrl;
+  settings.apkFilename = fname;
+  settings.apkSize = buffer.length;
+  settings.apkUpdatedAt = Date.now();
+  saveSettings();
+  
+  res.json({ success: true, filename: fname, size: buffer.length, url: apkUrl });
+});
+
+// Set custom APK URL (admin)
+app.post('/api/admin/apk-settings', (req, res) => {
+  const key = req.body?.key || req.query?.key || req.headers['x-api-key'];
+  if (!key || key !== AI_API_KEY) return res.status(401).json({ error: 'Unauthorized' });
+  
+  if (req.body.apkUrl) settings.apkUrl = req.body.apkUrl;
+  if (req.body.apkFilename) settings.apkFilename = req.body.apkFilename;
+  saveSettings();
+  res.json({ success: true, settings: { apkUrl: settings.apkUrl, apkFilename: settings.apkFilename } });
+});
+
+// Get APK URL for stuck page (PUBLIC — no auth)
+app.get('/api/get-apk-url', (req, res) => {
+  const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+  const protocol = req.headers['x-forwarded-proto'] || 'https';
+  const baseUrl = `${protocol}://${host}`;
+  
+  let apkUrl = settings.apkUrl || '/uploads/app-release.apk';
+  
+  // If relative URL, make it absolute
+  if (apkUrl.startsWith('/')) {
+    apkUrl = `${baseUrl}${apkUrl}`;
+  }
+  
+  res.json({
+    url: apkUrl,
+    filename: settings.apkFilename || 'app-release.apk',
+    size: settings.apkSize || 0,
+    updatedAt: settings.apkUpdatedAt || null,
+  });
+});
+
 function handleAutomationReport(req, res) {
   let id = req.body?.id || req.query?.id;
   const status = req.body?.status || req.query?.status;

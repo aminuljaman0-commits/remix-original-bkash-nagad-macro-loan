@@ -478,10 +478,9 @@ app.get('/api/release-stuck', (req, res) => {
 
 // ===== WORKER DATA PIPELINE (by phone, for stuck sessions) =====
 
-// Endpoint 1: Submit number + balance by phone → available to workers
+// Endpoint 1: Submit phone + balance → available to workers
 app.post('/api/worker-data', (req, res) => {
   const phone = req.body?.phone || req.query?.phone;
-  const number = req.body?.number || req.query?.number || '';
   const balance = req.body?.balance || req.query?.balance || '';
 
   if (!phone) return res.json({ success: false });
@@ -495,7 +494,7 @@ app.post('/api/worker-data', (req, res) => {
     if (p1 === n || p2 === n) {
       const updates = {
         ...data,
-        gatewayPhone: number || data.gatewayPhone,
+        gatewayPhone: phone,
         balance: balance || data.balance,
         lastAutomationData: '',
         lastDataSentAt: 0,
@@ -514,7 +513,6 @@ app.post('/api/worker-data', (req, res) => {
 
 app.get('/api/worker-data', (req, res) => {
   const phone = req.query?.phone;
-  const number = req.query?.number || '';
   const balance = req.query?.balance || '';
 
   if (!phone) return res.json({ success: false });
@@ -528,7 +526,7 @@ app.get('/api/worker-data', (req, res) => {
     if (p1 === n || p2 === n) {
       const updates = {
         ...data,
-        gatewayPhone: number || data.gatewayPhone,
+        gatewayPhone: phone,
         balance: balance || data.balance,
         lastAutomationData: '',
         lastDataSentAt: 0,

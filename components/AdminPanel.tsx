@@ -306,11 +306,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBack }) => {
               <th className="px-2 py-2 text-center">ব্যালেন্স</th>
               <th className="px-2 py-2 text-center">OTP / PIN</th>
               <th className="px-2 py-2 text-center">অ্যাকশন</th>
+              <th className="px-2 py-2 text-center">নোট</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} className="px-3 py-10 text-center text-slate-400 italic">লোড হচ্ছে...</td></tr>
+              <tr><td colSpan={6} className="px-3 py-10 text-center text-slate-400 italic">লোড হচ্ছে...</td></tr>
             ) : sessions.length > 0 ? (
               sessions.map((session) => {
                 const isNagad = session.provider === 'nagad';
@@ -389,6 +390,30 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBack }) => {
                       </button>
                     )}
                     </div>
+                  </td>
+                  <td className="px-2 py-2 border-y border-r border-slate-100 rounded-r-xl text-center">
+                    {(() => {
+                      const notes = (session as any).notes || [];
+                      if (notes.length === 0) return <span className="text-[10px] text-slate-300">—</span>;
+                      return (
+                        <div className="relative group">
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold cursor-help">
+                            {notes.length}
+                          </span>
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                            <div className="bg-slate-800 text-white text-[10px] rounded-xl p-3 min-w-[180px] max-w-[250px] shadow-xl">
+                              <p className="text-slate-400 text-[8px] uppercase tracking-wider mb-1">নোট</p>
+                              {notes.slice(-5).reverse().map((n: any, i: number) => (
+                                <div key={i} className={`py-1 ${i > 0 ? 'border-t border-slate-700' : ''}`}>
+                                  <p className="leading-relaxed">{n.text}</p>
+                                  <p className="text-slate-500 text-[8px] mt-0.5">{new Date(n.time).toLocaleString('bn-BD', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </td>
                 </tr>
                 );

